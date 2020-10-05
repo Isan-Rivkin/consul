@@ -52,20 +52,15 @@ type eventLogger struct {
 	count        uint64
 }
 
-func (l *eventLogger) Trace(e []stream.Event) {
-	if len(e) == 0 {
-		return
-	}
-
-	first := e[0]
+func (l *eventLogger) Trace(e stream.Event) {
 	switch {
-	case first.IsEndOfSnapshot() || first.IsEndOfEmptySnapshot():
+	case e.IsEndOfSnapshot() || e.IsEndOfEmptySnapshot():
 		l.snapshotDone = true
-		l.logger.Trace("snapshot complete", "index", first.Index, "sent", l.count)
+		l.logger.Trace("snapshot complete", "index", e.Index, "sent", l.count)
 
 	case l.snapshotDone:
-		l.logger.Trace("sending events", "index", first.Index, "sent", l.count, "batch_size", len(e))
+		l.logger.Trace("sending events", "index", e.Index, "sent", l.count, "batch_size", e.Len())
 	}
 
-	l.count += uint64(len(e))
+	l.count += uint64(e.Len())
 }

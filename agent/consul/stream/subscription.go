@@ -81,57 +81,40 @@ func (s *Subscription) Next(ctx context.Context) (Event, error) {
 			return Event{}, err
 		}
 		s.currentItem = next
-
-		events := filter(s.req.Key, next.Events)
-		switch len(events) {
-		case 0:
+		if len(next.Events) == 0 {
 			continue
-		case 1:
-			return events[0], nil
-		default:
-			return newBatchEvent(events), nil
 		}
+		event, ok := filterByKey(*s.req, next.Events)
+		if !ok {
+			continue
+		}
+		return event, nil
 	}
 }
 
-func newBatchEvent(events []Event) Event {
+func newEventFromBatch(req SubscribeRequest, events []Event) Event {
 	first := events[0]
+	if len(events) == 1 {
+		return first
+	}
 	return Event{
-		Topic:   first.Topic,
-		Key:     first.Key,
+		Topic:   req.Topic,
+		Key:     req.Key,
 		Index:   first.Index,
 		Payload: events,
 	}
 }
 
-// filter events to only those that match the key exactly.
-func filter(key string, events []Event) []Event {
-	if key == "" || len(events) == 0 {
-		return events
+func filterByKey(req SubscribeRequest, events []Event) (Event, bool) {
+	event := newEventFromBatch(req, events)
+	if req.Key == "" {
+		return event, true
 	}
 
-	var count int
-	for _, e := range events {
-		if key == e.Key {
-			count++
-		}
+	fn := func(e Event) bool {
+		return req.Key == e.Key
 	}
-
-	// Only allocate a new slice if some events need to be filtered out
-	switch count {
-	case 0:
-		return nil
-	case len(events):
-		return events
-	}
-
-	result := make([]Event, 0, count)
-	for _, e := range events {
-		if key == e.Key {
-			result = append(result, e)
-		}
-	}
-	return result
+	return event.Filter(fn)
 }
 
 // Close the subscription. Subscribers will receive an error when they call Next,
