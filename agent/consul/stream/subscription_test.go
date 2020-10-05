@@ -37,8 +37,7 @@ func TestSubscription(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, elapsed < 200*time.Millisecond,
 		"Event should have been delivered immediately, took %s", elapsed)
-	require.Len(t, got, 1)
-	require.Equal(t, index, got[0].Index)
+	require.Equal(t, index, got.Index)
 
 	// Schedule an event publish in a while
 	index++
@@ -55,8 +54,7 @@ func TestSubscription(t *testing.T) {
 		"Event should have been delivered after blocking 200ms, took %s", elapsed)
 	require.True(t, elapsed < 2*time.Second,
 		"Event should have been delivered after short time, took %s", elapsed)
-	require.Len(t, got, 1)
-	require.Equal(t, index, got[0].Index)
+	require.Equal(t, index, got.Index)
 
 	// Event with wrong key should not be delivered. Deliver a good message right
 	// so we don't have to block test thread forever or cancel func yet.
@@ -71,9 +69,8 @@ func TestSubscription(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, elapsed < 200*time.Millisecond,
 		"Event should have been delivered immediately, took %s", elapsed)
-	require.Len(t, got, 1)
-	require.Equal(t, index, got[0].Index)
-	require.Equal(t, "test", got[0].Key)
+	require.Equal(t, index, got.Index)
+	require.Equal(t, "test", got.Key)
 
 	// Cancelling the subscription context should unblock Next
 	start = time.Now()
@@ -92,9 +89,7 @@ func TestSubscription(t *testing.T) {
 
 func TestSubscription_Close(t *testing.T) {
 	eb := newEventBuffer()
-
 	index := uint64(100)
-
 	startHead := eb.Head()
 
 	// Start with an event in the buffer
@@ -117,8 +112,7 @@ func TestSubscription_Close(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, elapsed < 200*time.Millisecond,
 		"Event should have been delivered immediately, took %s", elapsed)
-	require.Len(t, got, 1)
-	require.Equal(t, index, got[0].Index)
+	require.Equal(t, index, got.Index)
 
 	// Schedule a Close simulating the server deciding this subscroption
 	// needs to reset (e.g. on ACL perm change).

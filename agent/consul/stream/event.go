@@ -19,6 +19,16 @@ type Event struct {
 	Payload interface{}
 }
 
+// Events returns a slice of all the events contain within this event. If the
+// Payload is an []Event, the payload is returned. Otherwise a new slice is
+// created which contains only this event.
+func (e Event) Events() []Event {
+	if batch, ok := e.Payload.([]Event); ok {
+		return batch
+	}
+	return []Event{e}
+}
+
 // IsEndOfSnapshot returns true if this is a framing event that indicates the
 // snapshot has completed. Future events from Subscription.Next will be
 // change events.

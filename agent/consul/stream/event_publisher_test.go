@@ -34,12 +34,11 @@ func TestEventPublisher_PublishChangesAndSubscribe_WithSnapshot(t *testing.T) {
 
 	result := nextResult(t, eventCh)
 	require.NoError(t, result.Err)
-	expected := []Event{{Payload: "snapshot-event-payload", Key: "sub-key"}}
-	require.Equal(t, expected, result.Events)
+	expected := Event{Payload: "snapshot-event-payload", Key: "sub-key"}
+	require.Equal(t, expected, result.Event)
 
 	result = nextResult(t, eventCh)
-	require.Len(t, result.Events, 1)
-	require.True(t, result.Events[0].IsEndOfSnapshot())
+	require.True(t, result.Event.IsEndOfSnapshot())
 
 	// Now subscriber should block waiting for updates
 	assertNoResult(t, eventCh)
@@ -54,8 +53,8 @@ func TestEventPublisher_PublishChangesAndSubscribe_WithSnapshot(t *testing.T) {
 	// Subscriber should see the published event
 	result = nextResult(t, eventCh)
 	require.NoError(t, result.Err)
-	expected = []Event{{Payload: "the-published-event-payload", Key: "sub-key", Topic: testTopic}}
-	require.Equal(t, expected, result.Events)
+	expected = Event{Payload: "the-published-event-payload", Key: "sub-key", Topic: testTopic}
+	require.Equal(t, expected, result.Event)
 }
 
 func newTestSnapshotHandlers() SnapshotHandlers {
@@ -70,14 +69,14 @@ func newTestSnapshotHandlers() SnapshotHandlers {
 	}
 }
 
-func consumeSubscription(ctx context.Context, sub *Subscription) <-chan subNextResult {
-	eventCh := make(chan subNextResult, 1)
+func consumeSubscription(ctx context.Context, sub *Subscription) <-chan eventOrErr {
+	eventCh := make(chan eventOrErr, 1)
 	go func() {
 		for {
 			es, err := sub.Next(ctx)
-			eventCh <- subNextResult{
-				Events: es,
-				Err:    err,
+			eventCh <- eventOrErr{
+				Event: es,
+				Err:   err,
 			}
 			if err != nil {
 				return
@@ -87,12 +86,12 @@ func consumeSubscription(ctx context.Context, sub *Subscription) <-chan subNextR
 	return eventCh
 }
 
-type subNextResult struct {
-	Events []Event
-	Err    error
+type eventOrErr struct {
+	Event Event
+	Err   error
 }
 
-func nextResult(t *testing.T, eventCh <-chan subNextResult) subNextResult {
+func nextResult(t *testing.T, eventCh <-chan eventOrErr) eventOrErr {
 	t.Helper()
 	select {
 	case next := <-eventCh:
@@ -100,16 +99,16 @@ func nextResult(t *testing.T, eventCh <-chan subNextResult) subNextResult {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatalf("no event after 100ms")
 	}
-	return subNextResult{}
+	return eventOrErr{}
 }
 
-func assertNoResult(t *testing.T, eventCh <-chan subNextResult) {
+func assertNoResult(t *testing.T, eventCh <-chan eventOrErr) {
 	t.Helper()
 	select {
 	case next := <-eventCh:
 		require.NoError(t, next.Err)
-		require.Len(t, next.Events, 1)
-		t.Fatalf("received unexpected event: %#v", next.Events[0].Payload)
+		require.Len(t, next.Event, 1)
+		t.Fatalf("received unexpected event: %#v", next.Event.Payload)
 	case <-time.After(100 * time.Millisecond):
 	}
 }
@@ -147,11 +146,11 @@ func TestEventPublisher_ShutdownClosesSubscriptions(t *testing.T) {
 
 func consumeSub(ctx context.Context, sub *Subscription) error {
 	for {
-		events, err := sub.Next(ctx)
+		event, err := sub.Next(ctx)
 		switch {
 		case err != nil:
 			return err
-		case len(events) == 1 && events[0].IsEndOfSnapshot():
+		case event.IsEndOfSnapshot():
 			continue
 		}
 	}

@@ -21,8 +21,8 @@ const (
 // closed. The client should Unsubscribe, then re-Subscribe.
 var ErrSubscriptionClosed = errors.New("subscription closed by server, client must reset state and resubscribe")
 
-// Subscription provides events on a Topic. Events may be filtered by Key.
-// Events are returned by Next(), and may start with a Snapshot of events.
+// Subscription provides events on a Topic. Event may be filtered by Key.
+// Event are returned by Next(), and may start with a Snapshot of events.
 type Subscription struct {
 	// state is accessed atomically 0 means open, 1 means closed with reload
 	state uint32
@@ -65,28 +65,42 @@ func newSubscription(req *SubscribeRequest, item *bufferItem, unsub func()) *Sub
 	}
 }
 
-// Next returns the next set of events to deliver. It must only be called from a
+// Next returns the next Event to deliver. It must only be called from a
 // single goroutine concurrently as it mutates the Subscription.
-func (s *Subscription) Next(ctx context.Context) ([]Event, error) {
+func (s *Subscription) Next(ctx context.Context) (Event, error) {
 	if atomic.LoadUint32(&s.state) == subscriptionStateClosed {
-		return nil, ErrSubscriptionClosed
+		return Event{}, ErrSubscriptionClosed
 	}
 
 	for {
 		next, err := s.currentItem.Next(ctx, s.forceClosed)
 		switch {
 		case err != nil && atomic.LoadUint32(&s.state) == subscriptionStateClosed:
-			return nil, ErrSubscriptionClosed
+			return Event{}, ErrSubscriptionClosed
 		case err != nil:
-			return nil, err
+			return Event{}, err
 		}
 		s.currentItem = next
 
 		events := filter(s.req.Key, next.Events)
-		if len(events) == 0 {
+		switch len(events) {
+		case 0:
 			continue
+		case 1:
+			return events[0], nil
+		default:
+			return newBatchEvent(events), nil
 		}
-		return events, nil
+	}
+}
+
+func newBatchEvent(events []Event) Event {
+	first := events[0]
+	return Event{
+		Topic:   first.Topic,
+		Key:     first.Key,
+		Index:   first.Index,
+		Payload: events,
 	}
 }
 
